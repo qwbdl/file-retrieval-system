@@ -1,0 +1,9 @@
+# 可复制/可移植的程序包。说明：wpslibs 为解析库，体积大，可随包分发。
+_重复待清理/
+__pycache__/
+*.pyc
+.DS_Store
+workdoc_index.db-*
+*.log
+nohup.out
+launchd/*.log
