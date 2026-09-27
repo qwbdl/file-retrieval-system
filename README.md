@@ -56,3 +56,51 @@ launchctl load ~/Library/LaunchAgents/FileRetrieval.plist
 
 ## GitHub 上传
 本目录即为可上传的仓库；`git init` 后提交即可（README 已备好，.gitignore 已忽略重复/临时文件）。
+
+## 部署说明（如何部署、访问地址）
+拿到本程序（克隆自 GitHub 或直接复制目录）后，在 macOS 上按以下步骤部署：
+
+### 1. 获取代码
+```bash
+git clone <仓库地址> 文件检索管理系统
+cd 文件检索管理系统
+```
+
+### 2. 一键启动
+```bash
+./start.sh
+```
+浏览器打开访问地址：**http://localhost:8765**
+启动后即可在首页检索、设置文件来源、点“新增文件一键索引”等。
+
+### 3. 开机启动（登录后自动运行）
+把 `launchd/FileRetrieval.plist` 复制到 `~/Library/LaunchAgents/`：
+```bash
+cp launchd/FileRetrieval.plist ~/Library/LaunchAgents/
+launchctl load ~/Library/LaunchAgents/FileRetrieval.plist
+```
+重启或登录后，服务自动运行在 http://localhost:8765。
+（若想取消开机启动：`launchctl unload ~/Library/LaunchAgents/FileRetrieval.plist`）
+
+### 4. 首次使用流程
+1. 打开 http://localhost:8765；
+2. 点“📁 设置文件来源”，添加你自己的文档文件夹完整路径；
+3. 点“📥 新增文件一键索引”补索引（或点“🔁 全部文件重建索引”全量）；
+4. 回到首页输入关键词检索。
+
+### 5. 停止服务
+```bash
+./stop.sh
+```
+
+### 6. 备份
+索引数据保存在 `workdoc_index.db`，备份/迁移时复制该文件即可（wpslibs/ 目录为解析库，一并带上）。
+
+### 7. 环境依赖
+- 系统自带 `python3`（macOS 自带 3.9）；
+- 老格式 `.doc` / `.ppt` 依赖 macOS 自带 `textutil`；
+- 首次运行会自动创建 `workdoc_index.db`（首次请先“设置文件来源”再索引）。
+
+### 8. 安全提示
+- 服务只监听 `127.0.0.1`（本机），不对外开放；
+- 端口默认 8765，可在 `./start.sh 端口号` 自定义（如 `./start.sh 9000`，访问 http://localhost:9000）。

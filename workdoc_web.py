@@ -208,19 +208,23 @@ tr:hover{background:#f8f2e4}
 .guide b{color:#5a3c1f;font-size:16px;display:block;margin-bottom:6px;text-align:center}
 .guide ul{list-style:none;padding:0;margin:8px 0 0;color:#5a4a2e;font-size:14px;line-height:1.75}
 .guide li{margin:5px 0}
+.guide-title{font-family:"宋体",SimSun,serif;font-size:20px;font-weight:bold;color:#5a3c1f;text-align:center;margin-bottom:14px;letter-spacing:1px}
+.guide-sec{margin:12px 0}
+.guide-sec-title{font-weight:bold;color:#5a3c1f;font-size:15px;text-align:left;letter-spacing:.5px}
+.guide-sec-text{color:#5a4a2e;font-size:14px;line-height:1.75;text-align:left;margin-top:4px;padding-left:14px;border-left:3px solid #d8c29a}
 .foot{color:#8b7359;font-size:13px;margin-top:26px;text-align:center;border-top:1px solid #e0d0b0;padding-top:16px}
 </style></head><body><div class="col">
 <div class="brandrow"><div class="brand">文件检索管理系统</div></div>"""
 
 GUIDE_HTML=f"""
-<div class="guide"><b>📖 使用说明</b><ul>
-<li><b>检索</b>：输入关键词（空格分隔多个关键词并行），全部命中选 AND，任一命中选 OR；可加“分类”筛选（PDF/Word/Excel/PPT/文本）。</li>
-<li><b>新增文件一键索引</b>：把新文件放进已设置的文件来源文件夹，点此按钮只补新文件，几秒钟完成。</li>
-<li><b>全部文件重建索引</b>：需要全量刷新（更换文件夹、清理重复等）时点此按钮，耗时较长（约20分钟），期间检索会短暂暂缓。</li>
-<li><b>设置文件来源</b>：添加/移除要索引的文件夹完整路径；可同时设置多个文件夹。</li>
-<li><b>统计信息</b>：查看按文件类型、按所在文件夹的分布；<b>最近新增</b>查看最近收录的文档。</li>
-<li><b>使用注意</b>：_重复待清理 文件夹自动跳过；索引保存在本程序目录下的 workdoc_index.db；本服务面向 macOS（旧 .doc/.ppt 依赖 textutil）。</li>
-</ul></div>"""
+<div class="guide"><div class="guide-title">📖 使用说明</div>
+<div class="guide-sec"><div class="guide-sec-title">检索</div><div class="guide-sec-text">输入关键词，空格分隔多个关键词并行；全部命中选 AND，任一命中选 OR；可加“分类”筛选（PDF/Word/Excel/PPT/文本）。</div></div>
+<div class="guide-sec"><div class="guide-sec-title">新增文件一键索引</div><div class="guide-sec-text">把新文件放进已设置的文件来源文件夹，点此按钮只补新文件，几秒钟完成。</div></div>
+<div class="guide-sec"><div class="guide-sec-title">全部文件重建索引</div><div class="guide-sec-text">需要全量刷新（更换文件夹、清理重复等）时点此按钮，耗时较长（约20分钟），期间检索会短暂暂缓。</div></div>
+<div class="guide-sec"><div class="guide-sec-title">设置文件来源</div><div class="guide-sec-text">添加/移除要索引的文件夹完整路径；可同时设置多个文件夹。</div></div>
+<div class="guide-sec"><div class="guide-sec-title">统计信息 / 最近新增</div><div class="guide-sec-text">统计信息查看按文件类型、按所在文件夹的分布；最近新增查看最近收录的文档。</div></div>
+<div class="guide-sec"><div class="guide-sec-title">使用注意</div><div class="guide-sec-text">_重复待清理 文件夹自动跳过；索引保存在本程序目录下的 workdoc_index.db；本服务面向 macOS（旧 .doc/.ppt 依赖 textutil）。</div></div>
+</div>"""
 
 def snip(text,q):
     i=text.find(q)
