@@ -128,6 +128,24 @@ def set_folders(folders):
     conn.execute("INSERT OR REPLACE INTO settings(key,value) VALUES('folders',?)",(json.dumps(folders,ensure_ascii=False),))
     conn.commit(); conn.close()
 
+def _access_issues():
+    """检查文件来源文件夹能否读取/列出（macOS 隐私权限）。返回 (路径, 错误) 列表。"""
+    bad=[]
+    for root in get_folders():
+        try:
+            with os.scandir(root) as it:
+                next(it,None)  # 只测试能否列出根目录
+        except Exception as e:
+            bad.append((root,str(e)))
+    return bad
+
+def _access_notice():
+    """生成供页面显示的 macOS 授权提示（有不可读文件夹时返回 HTML 片段）。"""
+    issues=_access_issues()
+    if not issues: return ""
+    msg="；".join(f'<b>{html.escape(r)}</b>（{html.escape(str(e)[:80])}）' for r,e in issues)
+    return f'<div class="cnt" style="background:#fbe9e7;border:1px solid #e0b0a0;border-radius:12px;padding:14px;color:#8b0000">⚠️ 文件来源文件夹无法读取（macOS 未授予访问权限）：{msg}。请在「系统设置→隐私与安全→完全磁盘访问（或文稿）」中授予运行本程序的 App/终端权限，然后重启服务；否则新增文件无法索引。</div>'
+
 def _ensure_fts(conn):
     conn.execute("CREATE TABLE IF NOT EXISTS docs(path TEXT,name TEXT,ext TEXT,text TEXT,struct TEXT)")
     conn.execute("CREATE VIRTUAL TABLE IF NOT EXISTS docs_fts USING fts5(text, content='docs', content_rowid='rowid', tokenize='trigram')")
@@ -438,6 +456,8 @@ class H(BaseHTTPRequestHandler):
         elif u.startswith("/index_new"):
             n=index_new()
             body=_base()+_back("📥 新增文件一键索引")
+            if n==0:
+                body+=_access_notice()
             body+=f'<div class="cnt">新增文件一键索引完成：新增 <b>{n}</b> 份</div>'
             body+='<div class="btnrow"><a href="/settings" style="text-decoration:none"><button class="sec">设置文件来源</button></a> <a href="/" style="text-decoration:none"><button class="sec">返回首页</button></a></div>'
             body+='<div class="foot">文件检索管理系统 · <a href="/" style="color:#8b7359">← 返回首页</a></div></body></html>'
@@ -445,6 +465,8 @@ class H(BaseHTTPRequestHandler):
         elif u.startswith("/reindex"):
             n=index()
             body=_base()+_back("🔁 全部文件重建索引")
+            if n==0:
+                body+=_access_notice()
             body+=f'<div class="cnt">全部文件重建索引完成：<b>{n}</b> 份（含全部文件来源）</div>'
             body+='<div class="btnrow"><a href="/settings" style="text-decoration:none"><button class="sec">设置文件来源</button></a> <a href="/" style="text-decoration:none"><button class="sec">返回首页</button></a></div>'
             body+='<div class="foot">文件检索管理系统 · <a href="/" style="color:#8b7359">← 返回首页</a></div></body></html>'
@@ -503,6 +525,7 @@ class H(BaseHTTPRequestHandler):
         else:
             n=get_folders()
             body=_base()
+            body+=_access_notice()
             body+=f'<div class="searchcard"><form method=get action="/search"><div class="searchbar"><input class="searchbox" name=q placeholder="输入关键词，空格分隔多个关键词并行检索" value=""></div><div class="searchbtns"><select name="mode"><option value="and" selected>全部命中(AND)</option><option value="or">任一命中(OR)</option></select><select name="t"><option value="all" selected>分类：全部</option><option value="pdf">PDF</option><option value="word">Word</option><option value="excel">Excel</option><option value="ppt">PPT</option><option value="text">文本</option><option value="image">图片</option></select><button>检索</button></div></form></div>'
             body+=f'<div class="btnrow"><form method=get action="/index_new"><button class="sec">📥 新增文件一键索引</button></form><form method=get action="/reindex"><button class="sec">🔁 全部文件重建索引</button></form><a href="/settings" style="text-decoration:none"><button class="sec">📁 设置文件来源</button></a><a href="/guide" style="text-decoration:none"><button class="sec">📖 使用说明</button></a></div>'
             body+=f'<div class="cnt">当前文件来源文件夹：{" · ".join(html.escape(f) for f in n)}</div>'
