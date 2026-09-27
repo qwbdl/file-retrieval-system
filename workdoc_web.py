@@ -255,6 +255,9 @@ class H(BaseHTTPRequestHandler):
             if ty not in TYPE_GROUPS: ty="all"
             cnt,rows=search(q,mode,ty)
             body=_base()+_back("🔍 检索结果")
+            mode_sel=f'<select name="mode"><option value="and" {"selected" if mode=="and" else ""}>全部命中(AND)</option><option value="or" {"selected" if mode=="or" else ""}>任一命中(OR)</option></select>'
+            t_sel='<select name="t"><option value="all" {"selected" if ty=="all" else ""}>分类：全部</option><option value="pdf" {"selected" if ty=="pdf" else ""}>PDF</option><option value="word" {"selected" if ty=="word" else ""}>Word</option><option value="excel" {"selected" if ty=="excel" else ""}>Excel</option><option value="ppt" {"selected" if ty=="ppt" else ""}>PPT</option><option value="text" {"selected" if ty=="text" else ""}>文本</option></select>'
+            body+=f'<div class="searchcard"><form method=get action="/search"><div class="searchbar"><input class="searchbox" name=q value="{html.escape(q)}" placeholder="输入关键词，空格分隔多个关键词并行检索"></div><div class="searchbtns">{mode_sel}{t_sel}<button>检索</button></div></form></div>'
             body+=f'<div class="cnt">命中 <b>{cnt}</b> 份（只显示前100） · 匹配方式：{"全部命中" if mode=="and" else "任一命中"} · 分类：{html.escape(ty)}</div>'
             body+=''.join(f'<div class="pagecard"><span class="tag">{html.escape(ext)}</span><div class="name">{html.escape(name)}</div><div class="path">{html.escape(path)}</div><div class="snp">{html.escape(snip(text,q))}</div></div>' for path,name,ext,text in rows[:100])
             body+='<div class="foot">文件检索管理系统 · 多关键词（空格分隔），全部命中选 AND，任一命中选 OR</div></body></html>'
