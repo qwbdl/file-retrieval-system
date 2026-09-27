@@ -11,7 +11,7 @@ DB=os.path.join(os.path.dirname(os.path.abspath(__file__)),"workdoc_index.db")
 try: sys.path.insert(0,os.path.join(os.path.dirname(os.path.abspath(__file__)),"wpslibs"))
 except: pass
 DEFAULT_FOLDER="/Users/hh/Documents/工作文档"
-TYPE_GROUPS={"all":[], "pdf":["pdf"], "word":["doc","docx"], "excel":["xls","xlsx","et"], "ppt":["ppt","pptx"], "text":["csv","txt","wps","rtf","html","json","xml","md","et"]}
+TYPE_GROUPS={"all":[], "pdf":["pdf"], "word":["doc","docx"], "excel":["xls","xlsx","et"], "ppt":["ppt","pptx"], "text":["csv","txt","wps","rtf","html","json","xml","md","et"], "image":["png","jpg","jpeg","gif","webp","bmp","svg","heic"]}
 
 def extract_text(path):
     ext=path.lower().rsplit(".",1)[-1]
@@ -51,6 +51,63 @@ def extract_text(path):
         return f"<ERR {e}>"
     return ""
 
+def extract_struct(path):
+    """返回结构化预览数据(JSON)：表格/幻灯片/段落/页。读取失败时返回 None。"""
+    ext=path.lower().rsplit(".",1)[-1]
+    try:
+        if ext=="pdf":
+            import pypdf
+            pages=[(p.extract_text() or "") for p in pypdf.PdfReader(path).pages]
+            return {"kind":"pdf","pages":pages}
+        if ext=="docx":
+            import docx
+            d=docx.Document(path)
+            paras=[p.text for p in d.paragraphs if p.text.strip()]
+            tables=[]
+            for t in d.tables:
+                tables.append([[c.text for c in r.cells] for r in t.rows])
+            return {"kind":"docx","paras":paras,"tables":tables}
+        if ext=="pptx":
+            import pptx
+            prs=pptx.Presentation(path)
+            slides=[]
+            for s in prs.slides:
+                txts=[sh.text for sh in s.shapes if hasattr(sh,"text") and sh.text.strip()]
+                slides.append(txts)
+            return {"kind":"pptx","slides":slides}
+        if ext=="xlsx":
+            import openpyxl
+            wb=openpyxl.load_workbook(path,read_only=True,data_only=True)
+            sheets=[]
+            for ws in wb.worksheets:
+                rows=[]
+                for row in ws.iter_rows():
+                    vals=[str(c.value) for c in row if c.value is not None]
+                    if vals: rows.append(vals)
+                sheets.append({"name":ws.title,"rows":rows})
+            return {"kind":"xlsx","sheets":sheets}
+        if ext=="xls":
+            import xlrd
+            bk=xlrd.open_workbook(path,on_demand=True)
+            sheets=[]
+            for ws in bk.sheets():
+                rows=[[str(c.value) for c in r if c.value not in (None,"")] for r in ws.all_rows()]
+                rows=[r for r in rows if r]
+                sheets.append({"name":ws.name,"rows":rows})
+            return {"kind":"xls","sheets":sheets}
+        if ext=="csv":
+            import csv as csvm
+            with open(path,newline="",encoding="utf-8",errors="replace") as f:
+                rows=[r for r in csvm.reader(f)]
+            return {"kind":"csv","rows":rows}
+        if ext in ("doc","ppt"):
+            out=subprocess.run(["textutil","-convert","txt","-output","-",path],capture_output=True)
+            txt=out.stdout.decode("utf-8","replace")
+            return {"kind":"text","text":txt}
+    except Exception as e:
+        return None
+    return None
+
 def _sanitize(s):
     return s.encode("utf-8","ignore").decode("utf-8","ignore") if s else s
 
@@ -72,8 +129,11 @@ def set_folders(folders):
     conn.commit(); conn.close()
 
 def _ensure_fts(conn):
-    conn.execute("CREATE TABLE IF NOT EXISTS docs(path TEXT,name TEXT,ext TEXT,text TEXT)")
+    conn.execute("CREATE TABLE IF NOT EXISTS docs(path TEXT,name TEXT,ext TEXT,text TEXT,struct TEXT)")
     conn.execute("CREATE VIRTUAL TABLE IF NOT EXISTS docs_fts USING fts5(text, content='docs', content_rowid='rowid', tokenize='trigram')")
+    conn.commit()
+    try: conn.execute("ALTER TABLE docs ADD COLUMN struct TEXT")
+    except Exception: pass
     conn.commit()
     if conn.execute("SELECT COUNT(*) FROM docs_fts").fetchone()[0]==0:
         for r in conn.execute("SELECT rowid,text FROM docs"):
@@ -84,7 +144,7 @@ def index():
     conn=_conn()
     conn.execute("DROP TABLE IF EXISTS docs_fts"); conn.commit()
     conn.execute("DROP TABLE IF EXISTS docs"); conn.commit()
-    conn.execute("CREATE TABLE docs(path TEXT,name TEXT,ext TEXT,text TEXT)")
+    conn.execute("CREATE TABLE docs(path TEXT,name TEXT,ext TEXT,text TEXT,struct TEXT)")
     conn.execute("CREATE VIRTUAL TABLE docs_fts USING fts5(text, content='docs', content_rowid='rowid', tokenize='trigram')")
     n=0
     for root in get_folders():
@@ -93,7 +153,8 @@ def index():
             for f in files:
                 p=os.path.join(cur,f)
                 txt=_sanitize(extract_text(p))
-                c2=conn.execute("INSERT INTO docs VALUES(?,?,?,?)",(p,os.path.basename(f),os.path.splitext(f)[1].lower(),txt))
+                st=json.dumps(extract_struct(p),ensure_ascii=True) if extract_struct(p) else ""
+                c2=conn.execute("INSERT INTO docs VALUES(?,?,?,?,?)",(p,os.path.basename(f),os.path.splitext(f)[1].lower(),txt,st))
                 conn.execute("INSERT INTO docs_fts(rowid,text) VALUES(?,?)",(c2.lastrowid,txt))
                 n+=1
                 if n%100==0: conn.commit()
@@ -111,11 +172,26 @@ def index_new():
                 p=os.path.join(cur,f)
                 if p in known: continue
                 txt=_sanitize(extract_text(p))
-                c2=conn.execute("INSERT INTO docs VALUES(?,?,?,?)",(p,os.path.basename(f),os.path.splitext(f)[1].lower(),txt))
+                st=json.dumps(extract_struct(p),ensure_ascii=True) if extract_struct(p) else ""
+                c2=conn.execute("INSERT INTO docs VALUES(?,?,?,?,?)",(p,os.path.basename(f),os.path.splitext(f)[1].lower(),txt,st))
                 conn.execute("INSERT INTO docs_fts(rowid,text) VALUES(?,?)",(c2.lastrowid,txt))
                 added+=1
     conn.commit(); conn.close()
     return added
+
+def build_struct():
+    """为已有索引补充结构化预览数据（需对文件有读取权限）。返回更新条数。"""
+    conn=_conn(); _ensure_fts(conn)
+    rows=conn.execute("SELECT rowid,path FROM docs WHERE struct IS NULL OR struct=''").fetchall()
+    done=0
+    for rid,path in rows:
+        st=json.dumps(extract_struct(path),ensure_ascii=False) if extract_struct(path) else ""
+        if st:
+            conn.execute("UPDATE docs SET struct=? WHERE rowid=?",(st,rid))
+            done+=1
+        if done%50==0: conn.commit()
+    conn.commit(); conn.close()
+    return done
 
 def search(q, mode="and", ty="all", top=100):
     ks=[k for k in re.split(r"\s+",q.strip()) if k]
@@ -199,12 +275,14 @@ tr:hover{background:#f8f2e4}
 .tag{display:inline-block;background:#f3e3c0;color:#5a3c1f;font-size:11px;padding:3px 10px;border-radius:8px;margin-right:6px}
 .path{color:#8b7359;font-size:12px;word-break:break-all}
 .snp{color:#5a4a2e;font-size:13px;line-height:1.55;border-left:3px solid #d8c29a;padding-left:9px;margin-top:6px}
+mark{background:#f2b870;color:#3a2c1a;padding:1px 3px;border-radius:4px;font-weight:600}
 .openrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;padding-top:8px;border-top:1px solid #eee2c6}
 .openrow a{text-decoration:none;font-size:12px;padding:6px 12px;border-radius:8px;border:1px solid #c9a97a;background:#fbf3e3;color:#5a3c1f;transition:.15s}
 .openrow a:hover{background:#8b5f3f;color:#fff;border-color:#8b5f3f}
 .preview{background:#fff;border-radius:14px;padding:16px;border:1px solid #e2d2b0;box-shadow:0 4px 12px rgba(90,60,31,.08);margin:12px 0}
 .preview .pre-title{font-weight:600;color:#3a2c1a;font-size:17px;padding-bottom:6px;margin-bottom:6px;border-bottom:1px solid #eee2c6}
 .preview .pre-txt{color:#4a3a1f;font-size:13px;line-height:1.6;white-space:pre-wrap;word-break:break-word}
+.preview .sechead{font-weight:600;color:#5a3c1f;font-size:14px;margin:10px 0 4px;border-bottom:1px solid #d8c29a;padding-bottom:3px}
 .preview embed,.preview img{width:100%;border-radius:10px}
 .shelf{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;margin:18px 0}
 .shelfcard{flex:1 1 240px;background:#fff;border-radius:14px;padding:18px;border:1px solid #e2d2b0;box-shadow:0 3px 8px rgba(90,60,31,.1)}
@@ -238,6 +316,47 @@ def snip(text,q):
     if i<0: return ""
     return text[max(0,i-60):i+120].replace("\n"," ")
 
+def hl(text,q):
+    """关键词高亮：把匹配的关键词用 <mark> 包裹（忽略大小写）。"""
+    ks=[k for k in re.split(r"\s+",q.strip()) if k]
+    e=html.escape(text)
+    for k in ks:
+        if k:
+            e=re.sub(re.escape(html.escape(k)), r'<mark>'+html.escape(k)+r'</mark>', e, flags=re.I)
+    return e
+
+def render_struct(s):
+    """把结构化JSON渲染成HTML预览（表格/幻灯片/段落/页）。"""
+    try: st=json.loads(s)
+    except: return None
+    if not isinstance(st,dict): return None
+    k=st.get("kind")
+    out=[]
+    if k=="pdf":
+        for i,p in enumerate(st.get("pages",[]),1):
+            if p: out.append(f'<div class="sechead">第{i}页</div><div class="pre-txt">{html.escape(p)}</div>')
+    elif k=="pptx":
+        for i,sl in enumerate(st.get("slides",[]),1):
+            if sl: out.append(f'<div class="sechead">幻灯片{i}</div><div class="pre-txt">'+html.escape("\n".join(sl))+'</div>')
+    elif k in ("xlsx","xls"):
+        for sh in st.get("sheets",[]):
+            rows=sh.get("rows",[])
+            if rows:
+                out.append(f'<div class="sechead">📊 {html.escape(sh.get("name","工作表"))}</div><table>'+''.join('<tr>'+''.join(f'<td>{html.escape(c)}</td>' for c in r)+'</tr>' for r in rows)+'</table>')
+    elif k=="csv":
+        rows=st.get("rows",[])
+        if rows:
+            out.append('<div class="sechead">📊 表格</div><table>'+''.join('<tr>'+''.join(f'<td>{html.escape(c)}</td>' for c in r)+'</tr>' for r in rows[:80])+'</table>')
+    elif k=="docx":
+        for p in st.get("paras",[]):
+            if p: out.append(f'<div class="pre-txt">{html.escape(p)}</div>')
+        for t in st.get("tables",[]):
+            if t: out.append('<div class="sechead">📊 表格</div><table>'+''.join('<tr>'+''.join(f'<td>{html.escape(c)}</td>' for c in r)+'</tr>' for r in t)+'</table>')
+    elif k=="text":
+        t=st.get("text","")
+        if t: out.append(f'<div class="pre-txt">{html.escape(t)}</div>')
+    return "\n".join(out)
+
 def _qs(u):
     return parse_qs(urlparse(unquote_plus(u)).query) if "?" in u else {}
 
@@ -266,11 +385,12 @@ class H(BaseHTTPRequestHandler):
             if ty not in TYPE_GROUPS: ty="all"
             cnt,rows=search(q,mode,ty)
             body=_base()+_back("🔍 检索结果")
+            back_url=f"/search?q={quote(q)}&mode={mode}&t={ty}"
             mode_sel=f'<select name="mode"><option value="and" {"selected" if mode=="and" else ""}>全部命中(AND)</option><option value="or" {"selected" if mode=="or" else ""}>任一命中(OR)</option></select>'
-            t_sel='<select name="t"><option value="all" {"selected" if ty=="all" else ""}>分类：全部</option><option value="pdf" {"selected" if ty=="pdf" else ""}>PDF</option><option value="word" {"selected" if ty=="word" else ""}>Word</option><option value="excel" {"selected" if ty=="excel" else ""}>Excel</option><option value="ppt" {"selected" if ty=="ppt" else ""}>PPT</option><option value="text" {"selected" if ty=="text" else ""}>文本</option></select>'
+            t_sel='<select name="t"><option value="all" {"selected" if ty=="all" else ""}>分类：全部</option><option value="pdf" {"selected" if ty=="pdf" else ""}>PDF</option><option value="word" {"selected" if ty=="word" else ""}>Word</option><option value="excel" {"selected" if ty=="excel" else ""}>Excel</option><option value="ppt" {"selected" if ty=="ppt" else ""}>PPT</option><option value="text" {"selected" if ty=="text" else ""}>文本</option><option value="image" {"selected" if ty=="image" else ""}>图片</option></select>'
             body+=f'<div class="searchcard"><form method=get action="/search"><div class="searchbar"><input class="searchbox" name=q value="{html.escape(q)}" placeholder="输入关键词，空格分隔多个关键词并行检索"></div><div class="searchbtns">{mode_sel}{t_sel}<button>检索</button></div></form></div>'
             body+=f'<div class="cnt">命中 <b>{cnt}</b> 份（只显示前100） · 匹配方式：{"全部命中" if mode=="and" else "任一命中"} · 分类：{html.escape(ty)}</div>'
-            body+=''.join(f'<div class="pagecard"><span class="tag">{html.escape(ext)}</span><div class="name">{html.escape(name)}</div><div class="path">{html.escape(path)}</div><div class="snp">{html.escape(snip(text,q))}</div><div class="openrow"><a href="/open?path={quote(path)}">🔗 打开文件</a><a href="/preview?path={quote(path)}">👁 预览</a></div></div>' for path,name,ext,text in rows[:100])
+            body+=''.join(f'<div class="pagecard"><span class="tag">{html.escape(ext)}</span><div class="name">{hl(name,q)}</div><div class="path">{html.escape(path)}</div><div class="snp">{hl(snip(text,q),q)}</div><div class="openrow"><a href="/open?path={quote(path)}&back={quote(back_url)}">🔗 打开文件</a><a href="/preview?path={quote(path)}&back={quote(back_url)}">👁 预览</a></div></div>' for path,name,ext,text in rows[:100])
             body+='<div class="foot">文件检索管理系统 · 多关键词（空格分隔），全部命中选 AND，任一命中选 OR</div></body></html>'
             self.send_response(200); self.send_header("Content-Type","text/html; charset=utf-8"); self.end_headers(); self.wfile.write(body.encode())
         elif u.startswith("/stats"):
@@ -284,7 +404,7 @@ class H(BaseHTTPRequestHandler):
             rows=recent(30)
             body=_base()+_back("🕘 最近新增")
             body+=f'<div class="cnt">最近收录的 <b>{len(rows)}</b> 份（按收录先后）</div>'
-            body+=''.join(f'<div class="pagecard"><span class="tag">{html.escape(ext)}</span><div class="name">{html.escape(name)}</div><div class="path">{html.escape(path)}</div><div class="openrow"><a href="/open?path={quote(path)}">🔗 打开文件</a><a href="/preview?path={quote(path)}">👁 预览</a></div></div>' for path,name,ext in rows)
+            body+=''.join(f'<div class="pagecard"><span class="tag">{html.escape(ext)}</span><div class="name">{html.escape(name)}</div><div class="path">{html.escape(path)}</div><div class="openrow"><a href="/open?path={quote(path)}&back=/">🔗 打开文件</a><a href="/preview?path={quote(path)}&back=/">👁 预览</a></div></div>' for path,name,ext in rows)
             body+='<div class="foot">文件检索管理系统 · <a href="/" style="color:#8b7359">← 返回首页</a></div></body></html>'
             self.send_response(200); self.send_header("Content-Type","text/html;charset=utf-8"); self.end_headers(); self.wfile.write(body.encode())
         elif u.startswith("/settings"):
@@ -331,6 +451,7 @@ class H(BaseHTTPRequestHandler):
             self.send_response(200); self.send_header("Content-Type","text/html;charset=utf-8"); self.end_headers(); self.wfile.write(body.encode())
         elif u.startswith("/open"):
             p=unquote_plus(qs.get("path",[""])[0])
+            back=unquote_plus(qs.get("back",[""])[0]) if qs.get("back") else "/"
             msg=""
             if os.path.isfile(p):
                 subprocess.Popen(["open",p])
@@ -339,24 +460,35 @@ class H(BaseHTTPRequestHandler):
                 msg=f'❌ 文件路径不存在或不可访问：<b>{html.escape(p)}</b>'
             body=_base()+_back("🔗 打开文件")
             body+=f'<div class="cnt">{msg}</div>'
-            body+='<div class="btnrow"><a href="/" style="text-decoration:none"><button class="sec">返回首页</button></a></div>'
+            body+=f'<div class="btnrow"><a href="{back}" style="text-decoration:none"><button class="sec">← 返回上次检索结果</button></a> <a href="/" style="text-decoration:none"><button class="sec">返回首页</button></a></div>'
             body+='<div class="foot">文件检索管理系统 · 打开文件</div></body></html>'
             self.send_response(200); self.send_header("Content-Type","text/html;charset=utf-8"); self.end_headers(); self.wfile.write(body.encode())
         elif u.startswith("/preview"):
             p=unquote_plus(qs.get("path",[""])[0])
+            back=unquote_plus(qs.get("back",[""])[0]) if qs.get("back") else "/"
+            qk=parse_qs(urlparse(back).query).get("q",[""])[0] if "?" in back else ""
+            qk=unquote_plus(qk)[:80]
             conn=_conn(); _ensure_fts(conn)
-            row=conn.execute("SELECT name,ext,text FROM docs WHERE path=?",(p,)).fetchone()
+            row=conn.execute("SELECT name,ext,text,struct FROM docs WHERE path=?",(p,)).fetchone()
             conn.close()
             body=_base()+_back("👁 文件预览")
             if row:
-                name,ext,text=row
+                name,ext,text,struct=row
                 body+=f'<div class="preview"><div class="pre-title">{html.escape(name)} <span class="tag">{html.escape(ext)}</span></div>'
-                body+=f'<div class="pre-txt">{html.escape(text or "(无可预览文本，请点“打开文件”查看)")}</div>'
-                body+=f'<div class="openrow"><a href="/open?path={quote(p)}">🔗 打开文件（默认应用）</a></div></div>'
+                struct_html=render_struct(struct)
+                if struct_html:
+                    body+=struct_html
+                elif ext in TYPE_GROUPS["image"]:
+                    body+=f'<div class="pre-txt">（图片文件，无可预览文本，请点“打开文件”查看原图）</div>'
+                elif ext in TYPE_GROUPS["ppt"] or ext in TYPE_GROUPS["excel"] or ext in TYPE_GROUPS["word"] or ext in TYPE_GROUPS["pdf"]:
+                    body+=f'<div class="pre-txt">{hl(text or "(无可预览文本，请点“打开文件”查看)",qk)}</div><div class="pre-note" style="color:#8b7359;font-size:12px;margin-top:6px">已提取正文预览（PDF/PPT/Excel/Word 等格式）</div>'
+                else:
+                    body+=f'<div class="pre-txt">{hl(text or "(无可预览文本，请点“打开文件”查看)",qk)}</div>'
+                body+=f'<div class="openrow"><a href="/open?path={quote(p)}&back={quote(back)}">🔗 打开文件（默认应用）</a></div></div>'
                 body+=f'<div class="path" style="text-align:center;color:#8b7359">{html.escape(p)}</div>'
             else:
                 body+=f'<div class="cnt">❌ 未在索引中找到该文件：<b>{html.escape(p)}</b></div>'
-            body+='<div class="btnrow"><a href="/" style="text-decoration:none"><button class="sec">返回首页</button></a></div>'
+            body+=f'<div class="btnrow"><a href="{back}" style="text-decoration:none"><button class="sec">← 返回上次检索结果</button></a> <a href="/" style="text-decoration:none"><button class="sec">返回首页</button></a></div>'
             body+='<div class="foot">文件检索管理系统 · 文件预览</div></body></html>'
             self.send_response(200); self.send_header("Content-Type","text/html;charset=utf-8"); self.end_headers(); self.wfile.write(body.encode())
         elif u.startswith("/file"):
@@ -371,7 +503,7 @@ class H(BaseHTTPRequestHandler):
         else:
             n=get_folders()
             body=_base()
-            body+=f'<div class="searchcard"><form method=get action="/search"><div class="searchbar"><input class="searchbox" name=q placeholder="输入关键词，空格分隔多个关键词并行检索" value=""></div><div class="searchbtns"><select name="mode"><option value="and" selected>全部命中(AND)</option><option value="or">任一命中(OR)</option></select><select name="t"><option value="all" selected>分类：全部</option><option value="pdf">PDF</option><option value="word">Word</option><option value="excel">Excel</option><option value="ppt">PPT</option><option value="text">文本</option></select><button>检索</button></div></form></div>'
+            body+=f'<div class="searchcard"><form method=get action="/search"><div class="searchbar"><input class="searchbox" name=q placeholder="输入关键词，空格分隔多个关键词并行检索" value=""></div><div class="searchbtns"><select name="mode"><option value="and" selected>全部命中(AND)</option><option value="or">任一命中(OR)</option></select><select name="t"><option value="all" selected>分类：全部</option><option value="pdf">PDF</option><option value="word">Word</option><option value="excel">Excel</option><option value="ppt">PPT</option><option value="text">文本</option><option value="image">图片</option></select><button>检索</button></div></form></div>'
             body+=f'<div class="btnrow"><form method=get action="/index_new"><button class="sec">📥 新增文件一键索引</button></form><form method=get action="/reindex"><button class="sec">🔁 全部文件重建索引</button></form><a href="/settings" style="text-decoration:none"><button class="sec">📁 设置文件来源</button></a><a href="/guide" style="text-decoration:none"><button class="sec">📖 使用说明</button></a></div>'
             body+=f'<div class="cnt">当前文件来源文件夹：{" · ".join(html.escape(f) for f in n)}</div>'
             body+='<div class="foot">文件检索管理系统 · 新增文件放进已选文件夹后点“新增文件一键索引”只补新文件；需全量刷新才点“全部文件重建索引”</div></body></html>'
