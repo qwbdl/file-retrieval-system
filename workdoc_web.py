@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# 文件检索管理系统 — Web版（MediaWiki 风格的界面与文档管理参考）
+# 文件检索管理系统 — Web版（百度式简洁界面 · 一点设计感）
 # 功能：正文全文检索（不止文件名）· 多文件夹 · 多关键词并行(AND/OR) · 分类筛选 · 统计信息 · 最近新增
 # 启动: python3 workdoc_web.py [端口，默认8765]  浏览器打开 http://localhost:8765
 import os, sys, json, sqlite3, html, subprocess, argparse, re
@@ -167,62 +167,56 @@ def recent(n=30):
     conn.close()
     return rows
 
-# ============ 页面样式（参考 MediaWiki：左侧导航栏 + 顶部标签页 + 分类/统计/最近新增 + 页面卡片式结果） ============
+# ============ 页面样式（百度式简洁 · 一点设计感：居中搜索、轻盈留白、柔边卡片） ============
 HTML_TOP="""<!doctype html><html><head><meta charset=utf-8><title>文件检索管理系统</title>
 <style>
 *{box-sizing:border-box}
-body{font-family:"宋体",SimSun,serif,-apple-system,BlinkMacSystemFont;background:linear-gradient(160deg,#3a2c1a,#5a4526,#7a6548);min-height:100vh;margin:0;padding:0}
-.wrap{max-width:1100px;margin:auto;padding:26px 22px 60px;display:flex;flex-wrap:wrap;gap:20px}
-.sidebar{flex:0 0 210px;background:#3a2c1a;border-radius:18px;padding:16px;border:1px solid #c9a97a;position:sticky;top:12px;align-self:flex-start}
-.sidebar .brand{font-family:"宋体",SimSun,serif;font-size:20px;font-weight:bold;color:#f7e9d0;text-align:center;margin-bottom:14px;letter-spacing:1px}
-.sidebar a{display:block;color:#d9c6a0;padding:9px 12px;border-radius:10px;text-decoration:none;transition:.15s;font-size:14px}
-.sidebar a:hover{background:#5a3c1f;color:#f7e9d0}
-.sidebar a.active{background:#8b5f3f;color:#fff;font-weight:600}
-.main{flex:1 1 auto;min-width:0}
-.header{text-align:center;background:linear-gradient(135deg,#3a2c1a,#5a4526,#7a6548);border-radius:18px;padding:28px 20px 24px;border:1px solid #c9a97a;box-shadow:0 6px 18px rgba(0,0,0,.35)}
-.brand{font-family:"宋体",SimSun,serif;font-size:45px;font-weight:bold;color:#f7e9d0;text-align:center;letter-spacing:2px;text-shadow:0 3px 6px rgba(0,0,0,.4)}
-.sub{font-size:13px;color:#d9c6a0;margin-top:6px;text-align:center}
-.tabbar{display:flex;gap:4px;flex-wrap:wrap;margin-top:14px;background:#fbf3e3;border-radius:14px;border:1px solid #d8c29a;padding:8px 12px;box-shadow:0 3px 8px rgba(0,0,0,.15)}
-.tabbar a{flex:1 1 auto;text-align:center;padding:9px 14px;border-radius:10px;text-decoration:none;color:#5a3c1f;font-size:14px}
-.tabbar a:hover{background:#f3e3c0}
-.tabbar a.active{background:#8b5f3f;color:#fff;font-weight:600}
-.backrow{display:flex;align-items:center;margin-top:12px;background:#fbf3e3;border-radius:14px;border:1px solid #d8c29a;padding:10px 16px;box-shadow:0 3px 8px rgba(0,0,0,.15)}
-.backrow a.home{text-decoration:none;color:#5a3c1f;font-weight:600;border:1px solid #c9a97a;padding:7px 12px;border-radius:10px;background:#f7e9d0;transition:.15s}
-.backrow a.home:hover{background:#5a3c1f;color:#f7e9d0}
-.backrow .brand2{font-size:16px;font-weight:700;color:#5a3c1f}
-h2{margin:20px 0 10px;font-size:24px;color:#f3e6c8;letter-spacing:.5px;text-shadow:0 2px 4px rgba(0,0,0,.35)}
-.searchcard{background:#fbf3e3;border-radius:16px;padding:16px 20px;border:1px solid #d8c29a;box-shadow:0 4px 12px rgba(0,0,0,.15);margin-top:16px}
-.searchbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-input{flex:1 1 300px;padding:13px 16px;font-size:15px;border:2px solid #c9a97a;border-radius:12px;outline:none;background:#fbf3e3;box-shadow:0 2px 6px rgba(0,0,0,.1)}
-input:focus{border-color:#8b5f3f;box-shadow:0 0 0 3px rgba(139,95,63,.25)}
-.searchbtns{display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap}
-select{padding:11px 12px;border-radius:11px;border:2px solid #c9a97a;background:#fbf3e3;font-size:14px;color:#5a3c1f}
-button{padding:13px 22px;border-radius:11px;background:#8b5f3f;color:#fbf3e3;border:0;cursor:pointer;font-size:15px;box-shadow:0 3px 8px rgba(0,0,0,.25);transition:.15s}
+body{font-family:"宋体",SimSun,serif,-apple-system,BlinkMacSystemFont;background:linear-gradient(180deg,#f8f4ee,#efe7d8);min-height:100vh;margin:0;padding:0;color:#3a2c1a}
+.col{max-width:900px;margin:0 auto;padding:30px 20px 70px}
+.brandrow{display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap;padding:26px 0 6px}
+.brand{font-family:"宋体",SimSun,serif;font-size:45px;font-weight:bold;color:#3a2c1a;letter-spacing:2px;text-align:center}
+.brandmark{width:56px;height:56px;border-radius:14px;background:linear-gradient(135deg,#8b5f3f,#5a3c1f);display:flex;align-items:center;justify-content:center;font-size:30px;box-shadow:0 4px 10px rgba(90,60,31,.3)}
+.topnav{display:flex;justify-content:center;gap:22px;flex-wrap:wrap;padding:12px 0 20px}
+.topnav a{text-decoration:none;color:#6a5337;font-size:13px;letter-spacing:.5px;padding:6px 14px;border-radius:10px;transition:.15s}
+.topnav a:hover{color:#8b5f3f;background:#f3e3c0}
+.topnav a.active{color:#8b5f3f;font-weight:600;border-bottom:2px solid #8b5f3f}
+.backrow{display:flex;align-items:center;gap:10px;padding:14px 18px;background:#fff;border:1px solid #e2d2b0;border-radius:14px;box-shadow:0 3px 8px rgba(90,60,31,.08);margin-bottom:14px}
+.backrow a{text-decoration:none;color:#8b5f3f;font-weight:600;padding:7px 12px;border-radius:10px;background:#f3e3c0}
+.backrow a:hover{background:#8b5f3f;color:#fff}
+.backrow span{font-size:15px;font-weight:600;color:#3a2c1a}
+.searchcard{background:#fff;border-radius:20px;border:1px solid #e2d2b0;box-shadow:0 6px 18px rgba(90,60,31,.1);padding:30px 34px}
+.searchbar{display:flex;justify-content:center;align-items:center;gap:12px;flex-wrap:wrap}
+.searchbox{flex:1 1 100%;max-width:560px;padding:16px 22px;font-size:17px;border:2px solid #d8c29a;border-radius:16px;outline:none;background:#fff;box-shadow:inset 0 2px 6px rgba(90,60,31,.1);transition:.15s}
+.searchbox:focus{border-color:#8b5f3f;box-shadow:0 0 0 4px rgba(139,95,63,.15)}
+.searchbtns{display:flex;justify-content:center;align-items:center;gap:12px;flex-wrap:wrap;margin-top:14px}
+select{padding:11px 14px;border-radius:12px;border:2px solid #d8c29a;background:#fff;font-size:14px;color:#5a3c1f;box-shadow:0 2px 5px rgba(90,60,31,.1)}
+button{padding:13px 30px;border-radius:12px;background:#8b5f3f;color:#fff;border:0;cursor:pointer;font-size:15px;box-shadow:0 4px 10px rgba(90,60,31,.25);transition:.15s;letter-spacing:1px}
 button:hover{background:#5a3c1f;transform:translateY(-1px)}
-button.sec{background:#b08857} button.sec:hover{background:#8b5f3f}
-.btnrow{display:flex;gap:10px;flex-wrap:wrap;margin:16px 0 8px}
-.cnt{color:#e6d3ae;font-size:14px;margin:10px 0 12px}
-table{width:100%;border-collapse:collapse;margin-top:8px;background:#fbf3e3;border-radius:14px;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,.15)}
-td{vertical-align:top;padding:14px 16px;border-bottom:1px solid #e2d2b0;font-size:14px;color:#4a3a1f}
-tr:hover{background:#f3e3c0}
-.pagecard{background:#fbf3e3;border-radius:14px;padding:16px;border:1px solid #d8c29a;box-shadow:0 4px 12px rgba(0,0,0,.15);margin-top:12px}
-.pagecard .name{font-weight:600;color:#3a2c1a;font-size:18px;border-bottom:1px solid #e2d2b0;padding-bottom:6px;margin-bottom:6px}
-.tag{display:inline-block;background:#e8d6b8;color:#5a3c1f;font-size:11px;padding:3px 10px;border-radius:8px;margin-right:6px}
+button.sec{background:#fff;color:#5a3c1f;border:2px solid #d8c29a;box-shadow:0 3px 8px rgba(90,60,31,.1)}
+button.sec:hover{background:#8b5f3f;color:#fff;border-color:#8b5f3f}
+.btnrow{display:flex;justify-content:center;gap:14px;flex-wrap:wrap;margin:22px 0 8px}
+.cnt{color:#6a5337;font-size:14px;margin:14px 0;text-align:center}
+table{width:100%;border-collapse:collapse;background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 4px 12px rgba(90,60,31,.1);margin-top:6px}
+td{vertical-align:top;padding:13px 16px;border-bottom:1px solid #eee2c6;font-size:14px;color:#4a3a1f}
+tr:hover{background:#f8f2e4}
+.pagecard{background:#fff;border-radius:14px;padding:18px 20px;border:1px solid #e2d2b0;box-shadow:0 4px 12px rgba(90,60,31,.08);margin:12px 0}
+.pagecard .name{font-weight:600;color:#3a2c1a;font-size:18px;padding-bottom:6px;margin-bottom:6px}
+.tag{display:inline-block;background:#f3e3c0;color:#5a3c1f;font-size:11px;padding:3px 10px;border-radius:8px;margin-right:6px}
 .path{color:#8b7359;font-size:12px;word-break:break-all}
-.snp{color:#5a4a2e;font-size:13px;line-height:1.55;border-left:3px solid #c9a97a;padding-left:9px;margin-top:6px}
-.shelf{display:flex;flex-wrap:wrap;gap:12px;margin-top:18px}
-.shelfcard{flex:1 1 220px;background:#fbf3e3;border-radius:14px;padding:16px;border:1px solid #d8c29a;box-shadow:0 3px 8px rgba(0,0,0,.15)}
+.snp{color:#5a4a2e;font-size:13px;line-height:1.55;border-left:3px solid #d8c29a;padding-left:9px;margin-top:6px}
+.shelf{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;margin:18px 0}
+.shelfcard{flex:1 1 240px;background:#fff;border-radius:14px;padding:18px;border:1px solid #e2d2b0;box-shadow:0 3px 8px rgba(90,60,31,.1)}
 .shelfcard b{color:#5a3c1f}
-.foldadd{background:#fbf3e3;border-radius:14px;padding:16px;border:1px solid #d8c29a;margin-top:14px;box-shadow:0 3px 8px rgba(0,0,0,.15)}
-.foldadd input{width:100%}
-.guide{border:2px solid #c9a97a;border-radius:16px;background:#fbf3e3;padding:18px 22px;margin-top:24px;box-shadow:0 4px 12px rgba(0,0,0,.15)}
-.guide b{color:#5a3c1f;font-size:16px;display:block;margin-bottom:6px}
-.guide ul{list-style:none;padding:0;margin:8px 0 0;color:#5a4a2e;font-size:14px;line-height:1.7}
-.guide li{margin:4px 0}
-.foot{color:#d9c6a0;font-size:13px;margin-top:20px;text-align:center;border-top:1px solid #9a7b5c;padding-top:14px}
-</style></head><body><div class="wrap">
-<div class="sidebar"><div class="brand">📚 文件检索管理系统</div><a href="/" {A1}>🔍 检索</a><a href="/settings" {A2}>📁 文件来源</a><a href="/index_new" {A3}>📥 新增一键索引</a><a href="/reindex" {A4}>🔁 全部重建索引</a><a href="/stats" {A5}>📊 统计信息</a><a href="/recent" {A6}>🕘 最近新增</a><a href="/" {A7}>📖 使用说明</a></div>
-<div class="main"><div class="header"><div class="brand">📚 文件检索管理系统</div><div class="sub">正文全文检索 · 不止文件名 · 多关键词并行 · 分类筛选</div></div>"""
+.foldadd{background:#fff;border-radius:14px;padding:20px;border:1px solid #e2d2b0;box-shadow:0 3px 8px rgba(90,60,31,.1)}
+.foldadd input{width:100%;padding:13px 16px;border:2px solid #d8c29a;border-radius:12px;font-size:15px}
+.guide{border:2px solid #d8c29a;border-radius:18px;background:#fff;padding:20px 24px;margin:26px auto 10px;max-width:760px;box-shadow:0 5px 14px rgba(90,60,31,.1)}
+.guide b{color:#5a3c1f;font-size:16px;display:block;margin-bottom:6px;text-align:center}
+.guide ul{list-style:none;padding:0;margin:8px 0 0;color:#5a4a2e;font-size:14px;line-height:1.75}
+.guide li{margin:5px 0}
+.foot{color:#8b7359;font-size:13px;margin-top:26px;text-align:center;border-top:1px solid #e0d0b0;padding-top:16px}
+</style></head><body><div class="col">
+<div class="brandrow"><div class="brandmark">📚</div><div class="brand">文件检索管理系统</div></div>
+<div class="topnav"><a href="/" {A1}>首页</a><a href="/search" {A2}>检索</a><a href="/settings" {A3}>文件来源</a><a href="/stats" {A4}>统计</a><a href="/recent" {A5}>最近新增</a><a href="/" {A6}>使用说明</a></div>"""
 
 GUIDE_HTML=f"""
 <div class="guide"><b>📖 使用说明</b><ul>
@@ -245,8 +239,14 @@ def _qs(u):
 def _active(route):
     return 'class="active"' if route else ""
 
-def _tabbar(active):
-    return f'<div class="tabbar"><a href="/" {"class=active" if active=="home" else ""}>首页</a><a href="/search" {"class=active" if active=="search" else ""}>检索</a><a href="/settings" {"class=active" if active=="settings" else ""}>文件来源</a><a href="/stats" {"class=active" if active=="stats" else ""}>统计</a><a href="/recent" {"class=active" if active=="recent" else ""}>最近新增</a></div>'
+def _topnav(active):
+    return f'<div class="topnav"><a href="/" {"class=active" if active=="home" else ""}>首页</a><a href="/search" {"class=active" if active=="search" else ""}>检索</a><a href="/settings" {"class=active" if active=="settings" else ""}>文件来源</a><a href="/stats" {"class=active" if active=="stats" else ""}>统计</a><a href="/recent" {"class=active" if active=="recent" else ""}>最近新增</a><a href="/" {"class=active" if active=="guide" else ""}>使用说明</a></div>'
+
+def _base(active):
+    return HTML_TOP.replace("{A1}",_active("home")).replace("{A2}",_active("search")).replace("{A3}",_active("settings")).replace("{A4}",_active("stats")).replace("{A5}",_active("recent")).replace("{A6}",_active("guide"))+_topnav(active)
+
+def _back(title):
+    return f'<div class="backrow"><a href="/">← 返回首页</a><span>{title}</span></div>'
 
 class H(BaseHTTPRequestHandler):
     def log_message(self,*a): pass
@@ -260,90 +260,73 @@ class H(BaseHTTPRequestHandler):
             ty=qs.get("t",["all"])[0] if qs.get("t") else "all"
             if ty not in TYPE_GROUPS: ty="all"
             cnt,rows=search(q,mode,ty)
-            body=HTML_TOP.replace("{A1}",_active("home")).replace("{A2}",_active("settings")).replace("{A3}",_active("index_new")).replace("{A4}",_active("reindex")).replace("{A5}",_active("stats")).replace("{A6}",_active("recent")).replace("{A7}",_active("guide"))
-            body+=_tabbar("search")
-            body+='<div class="backrow"><a class="home" href="/">← 返回首页</a><span class="brand2">🔍 检索结果</span></div>'
+            body=_base("search")+_back("🔍 检索结果")
             body+=f'<div class="cnt">命中 <b>{cnt}</b> 份（只显示前100） · 匹配方式：{"全部命中" if mode=="and" else "任一命中"} · 分类：{html.escape(ty)}</div>'
             body+=''.join(f'<div class="pagecard"><span class="tag">{html.escape(ext)}</span><div class="name">{html.escape(name)}</div><div class="path">{html.escape(path)}</div><div class="snp">{html.escape(snip(text,q))}</div></div>' for path,name,ext,text in rows[:100])
             body+='<div class="foot">文件检索管理系统 · 多关键词（空格分隔），全部命中选 AND，任一命中选 OR</div></body></html>'
             self.send_response(200); self.send_header("Content-Type","text/html; charset=utf-8"); self.end_headers(); self.wfile.write(body.encode())
         elif u.startswith("/stats"):
             tot,byext,fld=stats()
-            body=HTML_TOP.replace("{A1}",_active("home")).replace("{A2}",_active("settings")).replace("{A3}",_active("index_new")).replace("{A4}",_active("reindex")).replace("{A5}",_active("stats")).replace("{A6}",_active("recent")).replace("{A7}",_active("guide"))
-            body+=_tabbar("stats")
-            body+='<div class="backrow"><a class="home" href="/">← 返回首页</a><span class="brand2">📊 统计信息</span></div>'
+            body=_base("stats")+_back("📊 统计信息")
             body+=f'<div class="cnt">收录文档总数：<b>{tot}</b> 份</div><div class="searchcard"><b>按文件类型</b><table><tr><td>类型</td><td>数量</td></tr>'+''.join(f'<tr><td>{html.escape(e)}</td><td>{c}</td></tr>' for e,c in byext)+'</table></div>'
             body+='<div class="searchcard"><b>按所在文件夹（前20）</b><table><tr><td>文件夹</td><td>数量</td></tr>'+''.join(f'<tr><td>{html.escape(d)}</td><td>{c}</td></tr>' for d,c in fld)+'</table></div>'
-            body+='<div class="foot"><a href="/" style="color:#d9c6a0">← 返回首页</a></div></body></html>'
+            body+='<div class="foot">文件检索管理系统 · <a href="/" style="color:#8b7359">← 返回首页</a></div></body></html>'
             self.send_response(200); self.send_header("Content-Type","text/html;charset=utf-8"); self.end_headers(); self.wfile.write(body.encode())
         elif u.startswith("/recent"):
             rows=recent(30)
-            body=HTML_TOP.replace("{A1}",_active("home")).replace("{A2}",_active("settings")).replace("{A3}",_active("index_new")).replace("{A4}",_active("reindex")).replace("{A5}",_active("stats")).replace("{A6}",_active("recent")).replace("{A7}",_active("guide"))
-            body+=_tabbar("recent")
-            body+='<div class="backrow"><a class="home" href="/">← 返回首页</a><span class="brand2">🕘 最近新增</span></div>'
+            body=_base("recent")+_back("🕘 最近新增")
             body+=f'<div class="cnt">最近收录的 <b>{len(rows)}</b> 份（按收录先后）</div>'
             body+=''.join(f'<div class="pagecard"><span class="tag">{html.escape(ext)}</span><div class="name">{html.escape(name)}</div><div class="path">{html.escape(path)}</div></div>' for path,name,ext in rows)
-            body+='<div class="foot"><a href="/" style="color:#d9c6a0">← 返回首页</a></div></body></html>'
+            body+='<div class="foot">文件检索管理系统 · <a href="/" style="color:#8b7359">← 返回首页</a></div></body></html>'
             self.send_response(200); self.send_header("Content-Type","text/html;charset=utf-8"); self.end_headers(); self.wfile.write(body.encode())
         elif u.startswith("/settings"):
             folders=get_folders()
-            body=HTML_TOP.replace("{A1}",_active("home")).replace("{A2}",_active("settings")).replace("{A3}",_active("index_new")).replace("{A4}",_active("reindex")).replace("{A5}",_active("stats")).replace("{A6}",_active("recent")).replace("{A7}",_active("guide"))
-            body+=_tabbar("settings")
-            body+='<div class="backrow"><a class="home" href="/">← 返回首页</a><span class="brand2">📁 设置文件来源</span></div>'
+            body=_base("settings")+_back("📁 设置文件来源")
             body+='<div class="shelf">'+''.join(f'<div class="shelfcard">📁 <b>{html.escape(f)}</b><br><a href="/remove_folder?path={html.escape(f)}" style="color:#8b5f3f">移除</a></div>' for f in folders)+'</div>'
-            body+='<div class="foldadd"><form method=get action="/add_folder"><input name="path" placeholder="输入要加入的文件夹完整路径，如 /Users/xxx/文档"><button>添加文件夹</button></form></div>'
+            body+='<div class="foldadd"><form method=get action="/add_folder"><input name="path" placeholder="输入要加入的文件夹完整路径，如 /Users/xxx/文档"><div class="btnrow"><button>添加文件夹</button></div></form></div>'
             body+=GUIDE_HTML
-            body+='<div class="foot"><a href="/" style="color:#d9c6a0">← 返回首页</a> · 添加后点“新增文件一键索引”补索引新文件</div></body></html>'
+            body+='<div class="foot">文件检索管理系统 · 添加后点“新增文件一键索引”补索引新文件 · <a href="/" style="color:#8b7359">← 返回首页</a></div></body></html>'
             self.send_response(200); self.send_header("Content-Type","text/html;charset=utf-8"); self.end_headers(); self.wfile.write(body.encode())
         elif u.startswith("/add_folder"):
             p=unquote_plus(qs.get("path",[""])[0]).strip()
-            body=HTML_TOP.replace("{A1}",_active("home")).replace("{A2}",_active("settings")).replace("{A3}",_active("index_new")).replace("{A4}",_active("reindex")).replace("{A5}",_active("stats")).replace("{A6}",_active("recent")).replace("{A7}",_active("guide"))
-            body+=_tabbar("settings")
+            body=_base("settings")+_back("➕ 添加文件夹")
             if p and os.path.isdir(p):
                 fs=get_folders()
                 if p not in fs: set_folders(fs+[p])
                 body+=f'<div class="cnt">已添加文件夹：<b>{html.escape(p)}</b>。点“新增文件一键索引”补索引新文件。</div>'
             else:
                 body+=f'<div class="cnt">❌ 路径不可用或不存在：<b>{html.escape(p)}</b>（请填完整路径）</div>'
-            body+='<div class="backrow"><a class="home" href="/">← 返回首页</a><span class="brand2">➕ 添加文件夹</span></div>'
             body+='<div class="btnrow"><a href="/settings" style="text-decoration:none"><button class="sec">管理文件来源</button></a> <a href="/" style="text-decoration:none"><button class="sec">返回首页</button></a></div>'
-            body+=GUIDE_HTML+'<div class="foot"><a href="/" style="color:#d9c6a0">← 返回首页</a></div></body></html>'
+            body+=GUIDE_HTML+'<div class="foot">文件检索管理系统 · <a href="/" style="color:#8b7359">← 返回首页</a></div></body></html>'
             self.send_response(200); self.send_header("Content-Type","text/html;charset=utf-8"); self.end_headers(); self.wfile.write(body.encode())
         elif u.startswith("/remove_folder"):
             p=unquote_plus(qs.get("path",[""])[0]).strip()
             fs=[f for f in get_folders() if f!=p]
             set_folders(fs)
-            body=HTML_TOP.replace("{A1}",_active("home")).replace("{A2}",_active("settings")).replace("{A3}",_active("index_new")).replace("{A4}",_active("reindex")).replace("{A5}",_active("stats")).replace("{A6}",_active("recent")).replace("{A7}",_active("guide"))
-            body+=_tabbar("settings")
+            body=_base("settings")+_back("➖ 移除文件夹")
             body+=f'<div class="cnt">已移除文件夹：<b>{html.escape(p)}</b>（索引中已收录的文件仍可搜到，下次重建时剔除）。</div>'
-            body+='<div class="backrow"><a class="home" href="/">← 返回首页</a><span class="brand2">➖ 移除文件夹</span></div>'
             body+='<div class="btnrow"><a href="/settings" style="text-decoration:none"><button class="sec">管理文件来源</button></a> <a href="/" style="text-decoration:none"><button class="sec">返回首页</button></a></div>'
-            body+=GUIDE_HTML+'<div class="foot"><a href="/" style="color:#d9c6a0">← 返回首页</a></div></body></html>'
+            body+=GUIDE_HTML+'<div class="foot">文件检索管理系统 · <a href="/" style="color:#8b7359">← 返回首页</a></div></body></html>'
             self.send_response(200); self.send_header("Content-Type","text/html;charset=utf-8"); self.end_headers(); self.wfile.write(body.encode())
         elif u.startswith("/index_new"):
             n=index_new()
-            body=HTML_TOP.replace("{A1}",_active("home")).replace("{A2}",_active("settings")).replace("{A3}",_active("index_new")).replace("{A4}",_active("reindex")).replace("{A5}",_active("stats")).replace("{A6}",_active("recent")).replace("{A7}",_active("guide"))
-            body+=_tabbar("index_new")
-            body+='<div class="backrow"><a class="home" href="/">← 返回首页</a><span class="brand2">📥 新增文件一键索引</span></div>'
+            body=_base("index_new")+_back("📥 新增文件一键索引")
             body+=f'<div class="cnt">新增文件一键索引完成：新增 <b>{n}</b> 份</div>'
             body+='<div class="btnrow"><a href="/settings" style="text-decoration:none"><button class="sec">设置文件来源</button></a> <a href="/" style="text-decoration:none"><button class="sec">返回首页</button></a></div>'
-            body+=GUIDE_HTML+'<div class="foot"><a href="/" style="color:#d9c6a0">← 返回首页</a></div></body></html>'
+            body+=GUIDE_HTML+'<div class="foot">文件检索管理系统 · <a href="/" style="color:#8b7359">← 返回首页</a></div></body></html>'
             self.send_response(200); self.send_header("Content-Type","text/html;charset=utf-8"); self.end_headers(); self.wfile.write(body.encode())
         elif u.startswith("/reindex"):
             n=index()
-            body=HTML_TOP.replace("{A1}",_active("home")).replace("{A2}",_active("settings")).replace("{A3}",_active("index_new")).replace("{A4}",_active("reindex")).replace("{A5}",_active("stats")).replace("{A6}",_active("recent")).replace("{A7}",_active("guide"))
-            body+=_tabbar("reindex")
-            body+='<div class="backrow"><a class="home" href="/">← 返回首页</a><span class="brand2">🔁 全部文件重建索引</span></div>'
+            body=_base("reindex")+_back("🔁 全部文件重建索引")
             body+=f'<div class="cnt">全部文件重建索引完成：<b>{n}</b> 份（含全部文件来源）</div>'
             body+='<div class="btnrow"><a href="/settings" style="text-decoration:none"><button class="sec">设置文件来源</button></a> <a href="/" style="text-decoration:none"><button class="sec">返回首页</button></a></div>'
-            body+=GUIDE_HTML+'<div class="foot"><a href="/" style="color:#d9c6a0">← 返回首页</a></div></body></html>'
+            body+=GUIDE_HTML+'<div class="foot">文件检索管理系统 · <a href="/" style="color:#8b7359">← 返回首页</a></div></body></html>'
             self.send_response(200); self.send_header("Content-Type","text/html;charset=utf-8"); self.end_headers(); self.wfile.write(body.encode())
         else:
             n=get_folders()
-            body=HTML_TOP.replace("{A1}",_active("home")).replace("{A2}",_active("settings")).replace("{A3}",_active("index_new")).replace("{A4}",_active("reindex")).replace("{A5}",_active("stats")).replace("{A6}",_active("recent")).replace("{A7}",_active("guide"))
-            body+=_tabbar("home")
-            body+=f'<div class="searchcard"><form method=get action="/search"><div class="searchbar"><input name=q placeholder="输入关键词，空格分隔多个关键词并行检索" value=""></div><div class="searchbtns"><select name="mode"><option value="and" selected>全部命中(AND)</option><option value="or">任一命中(OR)</option></select><select name="t"><option value="all" selected>分类：全部</option><option value="pdf">PDF</option><option value="word">Word</option><option value="excel">Excel</option><option value="ppt">PPT</option><option value="text">文本</option></select><button>检索</button></div></form></div>'
-            body+=f'<div class="btnrow"><form method=get action="/index_new"><button>📥 新增文件一键索引</button></form><form method=get action="/reindex"><button class="sec">🔁 全部文件重建索引</button></form><a href="/settings" style="text-decoration:none"><button class="sec">📁 设置文件来源</button></a></div>'
+            body=_base("home")
+            body+=f'<div class="searchcard"><form method=get action="/search"><div class="searchbar"><input class="searchbox" name=q placeholder="输入关键词，空格分隔多个关键词并行检索" value=""></div><div class="searchbtns"><select name="mode"><option value="and" selected>全部命中(AND)</option><option value="or">任一命中(OR)</option></select><select name="t"><option value="all" selected>分类：全部</option><option value="pdf">PDF</option><option value="word">Word</option><option value="excel">Excel</option><option value="ppt">PPT</option><option value="text">文本</option></select><button>检索</button></div></form></div>'
+            body+=f'<div class="btnrow"><form method=get action="/index_new"><button class="sec">📥 新增文件一键索引</button></form><form method=get action="/reindex"><button class="sec">🔁 全部文件重建索引</button></form><a href="/settings" style="text-decoration:none"><button class="sec">📁 设置文件来源</button></a></div>'
             body+=f'<div class="cnt">当前文件来源文件夹：{" · ".join(html.escape(f) for f in n)}</div>'
             body+=GUIDE_HTML
             body+='<div class="foot">文件检索管理系统 · 新增文件放进已选文件夹后点“新增文件一键索引”只补新文件；需全量刷新才点“全部文件重建索引”</div></body></html>'
