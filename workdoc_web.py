@@ -167,19 +167,14 @@ def recent(n=30):
     conn.close()
     return rows
 
-# ============ 页面样式（百度式简洁 · 一点设计感：居中搜索、轻盈留白、柔边卡片） ============
+# ============ 页面样式（百度式简洁 · 仅保留品牌行 · 使用说明为独立按钮页） ============
 HTML_TOP="""<!doctype html><html><head><meta charset=utf-8><title>文件检索管理系统</title>
 <style>
 *{box-sizing:border-box}
 body{font-family:"宋体",SimSun,serif,-apple-system,BlinkMacSystemFont;background:linear-gradient(180deg,#f8f4ee,#efe7d8);min-height:100vh;margin:0;padding:0;color:#3a2c1a}
 .col{max-width:900px;margin:0 auto;padding:30px 20px 70px}
-.brandrow{display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap;padding:26px 0 6px}
+.brandrow{display:flex;align-items:center;justify-content:center;padding:26px 0 14px}
 .brand{font-family:"宋体",SimSun,serif;font-size:45px;font-weight:bold;color:#3a2c1a;letter-spacing:2px;text-align:center}
-.brandmark{width:56px;height:56px;border-radius:14px;background:linear-gradient(135deg,#8b5f3f,#5a3c1f);display:flex;align-items:center;justify-content:center;font-size:30px;box-shadow:0 4px 10px rgba(90,60,31,.3)}
-.topnav{display:flex;justify-content:center;gap:22px;flex-wrap:wrap;padding:12px 0 20px}
-.topnav a{text-decoration:none;color:#6a5337;font-size:13px;letter-spacing:.5px;padding:6px 14px;border-radius:10px;transition:.15s}
-.topnav a:hover{color:#8b5f3f;background:#f3e3c0}
-.topnav a.active{color:#8b5f3f;font-weight:600;border-bottom:2px solid #8b5f3f}
 .backrow{display:flex;align-items:center;gap:10px;padding:14px 18px;background:#fff;border:1px solid #e2d2b0;border-radius:14px;box-shadow:0 3px 8px rgba(90,60,31,.08);margin-bottom:14px}
 .backrow a{text-decoration:none;color:#8b5f3f;font-weight:600;padding:7px 12px;border-radius:10px;background:#f3e3c0}
 .backrow a:hover{background:#8b5f3f;color:#fff}
@@ -209,14 +204,13 @@ tr:hover{background:#f8f2e4}
 .shelfcard b{color:#5a3c1f}
 .foldadd{background:#fff;border-radius:14px;padding:20px;border:1px solid #e2d2b0;box-shadow:0 3px 8px rgba(90,60,31,.1)}
 .foldadd input{width:100%;padding:13px 16px;border:2px solid #d8c29a;border-radius:12px;font-size:15px}
-.guide{border:2px solid #d8c29a;border-radius:18px;background:#fff;padding:20px 24px;margin:26px auto 10px;max-width:760px;box-shadow:0 5px 14px rgba(90,60,31,.1)}
+.guide{border:2px solid #d8c29a;border-radius:18px;background:#fff;padding:20px 24px;margin:8px 0 10px;box-shadow:0 5px 14px rgba(90,60,31,.1)}
 .guide b{color:#5a3c1f;font-size:16px;display:block;margin-bottom:6px;text-align:center}
 .guide ul{list-style:none;padding:0;margin:8px 0 0;color:#5a4a2e;font-size:14px;line-height:1.75}
 .guide li{margin:5px 0}
 .foot{color:#8b7359;font-size:13px;margin-top:26px;text-align:center;border-top:1px solid #e0d0b0;padding-top:16px}
 </style></head><body><div class="col">
-<div class="brandrow"><div class="brandmark">📚</div><div class="brand">文件检索管理系统</div></div>
-<div class="topnav"><a href="/" {A1}>首页</a><a href="/search" {A2}>检索</a><a href="/settings" {A3}>文件来源</a><a href="/stats" {A4}>统计</a><a href="/recent" {A5}>最近新增</a><a href="/" {A6}>使用说明</a></div>"""
+<div class="brandrow"><div class="brand">文件检索管理系统</div></div>"""
 
 GUIDE_HTML=f"""
 <div class="guide"><b>📖 使用说明</b><ul>
@@ -236,14 +230,8 @@ def snip(text,q):
 def _qs(u):
     return parse_qs(urlparse(unquote_plus(u)).query) if "?" in u else {}
 
-def _active(route):
-    return 'class="active"' if route else ""
-
-def _topnav(active):
-    return f'<div class="topnav"><a href="/" {"class=active" if active=="home" else ""}>首页</a><a href="/search" {"class=active" if active=="search" else ""}>检索</a><a href="/settings" {"class=active" if active=="settings" else ""}>文件来源</a><a href="/stats" {"class=active" if active=="stats" else ""}>统计</a><a href="/recent" {"class=active" if active=="recent" else ""}>最近新增</a><a href="/" {"class=active" if active=="guide" else ""}>使用说明</a></div>'
-
-def _base(active):
-    return HTML_TOP.replace("{A1}",_active("home")).replace("{A2}",_active("search")).replace("{A3}",_active("settings")).replace("{A4}",_active("stats")).replace("{A5}",_active("recent")).replace("{A6}",_active("guide"))+_topnav(active)
+def _base():
+    return HTML_TOP
 
 def _back(title):
     return f'<div class="backrow"><a href="/">← 返回首页</a><span>{title}</span></div>'
@@ -253,43 +241,48 @@ class H(BaseHTTPRequestHandler):
     def do_GET(self):
         u=self.path
         qs=_qs(u)
-        if u.startswith("/search"):
+        if u.startswith("/guide"):
+            body=_base()+_back("📖 使用说明")
+            body+=GUIDE_HTML
+            body+='<div class="btnrow"><a href="/" style="text-decoration:none"><button class="sec">返回首页</button></a></div>'
+            body+='<div class="foot">文件检索管理系统 · 使用说明</div></body></html>'
+            self.send_response(200); self.send_header("Content-Type","text/html;charset=utf-8"); self.end_headers(); self.wfile.write(body.encode())
+        elif u.startswith("/search"):
             q=unquote_plus(qs.get("q",[""])[0])[:80]
             mode=qs.get("mode",["and"])[0] if qs.get("mode") else "and"
             if mode not in ("and","or"): mode="and"
             ty=qs.get("t",["all"])[0] if qs.get("t") else "all"
             if ty not in TYPE_GROUPS: ty="all"
             cnt,rows=search(q,mode,ty)
-            body=_base("search")+_back("🔍 检索结果")
+            body=_base()+_back("🔍 检索结果")
             body+=f'<div class="cnt">命中 <b>{cnt}</b> 份（只显示前100） · 匹配方式：{"全部命中" if mode=="and" else "任一命中"} · 分类：{html.escape(ty)}</div>'
             body+=''.join(f'<div class="pagecard"><span class="tag">{html.escape(ext)}</span><div class="name">{html.escape(name)}</div><div class="path">{html.escape(path)}</div><div class="snp">{html.escape(snip(text,q))}</div></div>' for path,name,ext,text in rows[:100])
             body+='<div class="foot">文件检索管理系统 · 多关键词（空格分隔），全部命中选 AND，任一命中选 OR</div></body></html>'
             self.send_response(200); self.send_header("Content-Type","text/html; charset=utf-8"); self.end_headers(); self.wfile.write(body.encode())
         elif u.startswith("/stats"):
             tot,byext,fld=stats()
-            body=_base("stats")+_back("📊 统计信息")
+            body=_base()+_back("📊 统计信息")
             body+=f'<div class="cnt">收录文档总数：<b>{tot}</b> 份</div><div class="searchcard"><b>按文件类型</b><table><tr><td>类型</td><td>数量</td></tr>'+''.join(f'<tr><td>{html.escape(e)}</td><td>{c}</td></tr>' for e,c in byext)+'</table></div>'
             body+='<div class="searchcard"><b>按所在文件夹（前20）</b><table><tr><td>文件夹</td><td>数量</td></tr>'+''.join(f'<tr><td>{html.escape(d)}</td><td>{c}</td></tr>' for d,c in fld)+'</table></div>'
             body+='<div class="foot">文件检索管理系统 · <a href="/" style="color:#8b7359">← 返回首页</a></div></body></html>'
             self.send_response(200); self.send_header("Content-Type","text/html;charset=utf-8"); self.end_headers(); self.wfile.write(body.encode())
         elif u.startswith("/recent"):
             rows=recent(30)
-            body=_base("recent")+_back("🕘 最近新增")
+            body=_base()+_back("🕘 最近新增")
             body+=f'<div class="cnt">最近收录的 <b>{len(rows)}</b> 份（按收录先后）</div>'
             body+=''.join(f'<div class="pagecard"><span class="tag">{html.escape(ext)}</span><div class="name">{html.escape(name)}</div><div class="path">{html.escape(path)}</div></div>' for path,name,ext in rows)
             body+='<div class="foot">文件检索管理系统 · <a href="/" style="color:#8b7359">← 返回首页</a></div></body></html>'
             self.send_response(200); self.send_header("Content-Type","text/html;charset=utf-8"); self.end_headers(); self.wfile.write(body.encode())
         elif u.startswith("/settings"):
             folders=get_folders()
-            body=_base("settings")+_back("📁 设置文件来源")
+            body=_base()+_back("📁 设置文件来源")
             body+='<div class="shelf">'+''.join(f'<div class="shelfcard">📁 <b>{html.escape(f)}</b><br><a href="/remove_folder?path={html.escape(f)}" style="color:#8b5f3f">移除</a></div>' for f in folders)+'</div>'
             body+='<div class="foldadd"><form method=get action="/add_folder"><input name="path" placeholder="输入要加入的文件夹完整路径，如 /Users/xxx/文档"><div class="btnrow"><button>添加文件夹</button></div></form></div>'
-            body+=GUIDE_HTML
             body+='<div class="foot">文件检索管理系统 · 添加后点“新增文件一键索引”补索引新文件 · <a href="/" style="color:#8b7359">← 返回首页</a></div></body></html>'
             self.send_response(200); self.send_header("Content-Type","text/html;charset=utf-8"); self.end_headers(); self.wfile.write(body.encode())
         elif u.startswith("/add_folder"):
             p=unquote_plus(qs.get("path",[""])[0]).strip()
-            body=_base("settings")+_back("➕ 添加文件夹")
+            body=_base()+_back("➕ 添加文件夹")
             if p and os.path.isdir(p):
                 fs=get_folders()
                 if p not in fs: set_folders(fs+[p])
@@ -297,38 +290,37 @@ class H(BaseHTTPRequestHandler):
             else:
                 body+=f'<div class="cnt">❌ 路径不可用或不存在：<b>{html.escape(p)}</b>（请填完整路径）</div>'
             body+='<div class="btnrow"><a href="/settings" style="text-decoration:none"><button class="sec">管理文件来源</button></a> <a href="/" style="text-decoration:none"><button class="sec">返回首页</button></a></div>'
-            body+=GUIDE_HTML+'<div class="foot">文件检索管理系统 · <a href="/" style="color:#8b7359">← 返回首页</a></div></body></html>'
+            body+='<div class="foot">文件检索管理系统 · <a href="/" style="color:#8b7359">← 返回首页</a></div></body></html>'
             self.send_response(200); self.send_header("Content-Type","text/html;charset=utf-8"); self.end_headers(); self.wfile.write(body.encode())
         elif u.startswith("/remove_folder"):
             p=unquote_plus(qs.get("path",[""])[0]).strip()
             fs=[f for f in get_folders() if f!=p]
             set_folders(fs)
-            body=_base("settings")+_back("➖ 移除文件夹")
+            body=_base()+_back("➖ 移除文件夹")
             body+=f'<div class="cnt">已移除文件夹：<b>{html.escape(p)}</b>（索引中已收录的文件仍可搜到，下次重建时剔除）。</div>'
             body+='<div class="btnrow"><a href="/settings" style="text-decoration:none"><button class="sec">管理文件来源</button></a> <a href="/" style="text-decoration:none"><button class="sec">返回首页</button></a></div>'
-            body+=GUIDE_HTML+'<div class="foot">文件检索管理系统 · <a href="/" style="color:#8b7359">← 返回首页</a></div></body></html>'
+            body+='<div class="foot">文件检索管理系统 · <a href="/" style="color:#8b7359">← 返回首页</a></div></body></html>'
             self.send_response(200); self.send_header("Content-Type","text/html;charset=utf-8"); self.end_headers(); self.wfile.write(body.encode())
         elif u.startswith("/index_new"):
             n=index_new()
-            body=_base("index_new")+_back("📥 新增文件一键索引")
+            body=_base()+_back("📥 新增文件一键索引")
             body+=f'<div class="cnt">新增文件一键索引完成：新增 <b>{n}</b> 份</div>'
             body+='<div class="btnrow"><a href="/settings" style="text-decoration:none"><button class="sec">设置文件来源</button></a> <a href="/" style="text-decoration:none"><button class="sec">返回首页</button></a></div>'
-            body+=GUIDE_HTML+'<div class="foot">文件检索管理系统 · <a href="/" style="color:#8b7359">← 返回首页</a></div></body></html>'
+            body+='<div class="foot">文件检索管理系统 · <a href="/" style="color:#8b7359">← 返回首页</a></div></body></html>'
             self.send_response(200); self.send_header("Content-Type","text/html;charset=utf-8"); self.end_headers(); self.wfile.write(body.encode())
         elif u.startswith("/reindex"):
             n=index()
-            body=_base("reindex")+_back("🔁 全部文件重建索引")
+            body=_base()+_back("🔁 全部文件重建索引")
             body+=f'<div class="cnt">全部文件重建索引完成：<b>{n}</b> 份（含全部文件来源）</div>'
             body+='<div class="btnrow"><a href="/settings" style="text-decoration:none"><button class="sec">设置文件来源</button></a> <a href="/" style="text-decoration:none"><button class="sec">返回首页</button></a></div>'
-            body+=GUIDE_HTML+'<div class="foot">文件检索管理系统 · <a href="/" style="color:#8b7359">← 返回首页</a></div></body></html>'
+            body+='<div class="foot">文件检索管理系统 · <a href="/" style="color:#8b7359">← 返回首页</a></div></body></html>'
             self.send_response(200); self.send_header("Content-Type","text/html;charset=utf-8"); self.end_headers(); self.wfile.write(body.encode())
         else:
             n=get_folders()
-            body=_base("home")
+            body=_base()
             body+=f'<div class="searchcard"><form method=get action="/search"><div class="searchbar"><input class="searchbox" name=q placeholder="输入关键词，空格分隔多个关键词并行检索" value=""></div><div class="searchbtns"><select name="mode"><option value="and" selected>全部命中(AND)</option><option value="or">任一命中(OR)</option></select><select name="t"><option value="all" selected>分类：全部</option><option value="pdf">PDF</option><option value="word">Word</option><option value="excel">Excel</option><option value="ppt">PPT</option><option value="text">文本</option></select><button>检索</button></div></form></div>'
-            body+=f'<div class="btnrow"><form method=get action="/index_new"><button class="sec">📥 新增文件一键索引</button></form><form method=get action="/reindex"><button class="sec">🔁 全部文件重建索引</button></form><a href="/settings" style="text-decoration:none"><button class="sec">📁 设置文件来源</button></a></div>'
+            body+=f'<div class="btnrow"><form method=get action="/index_new"><button class="sec">📥 新增文件一键索引</button></form><form method=get action="/reindex"><button class="sec">🔁 全部文件重建索引</button></form><a href="/settings" style="text-decoration:none"><button class="sec">📁 设置文件来源</button></a><a href="/guide" style="text-decoration:none"><button class="sec">📖 使用说明</button></a></div>'
             body+=f'<div class="cnt">当前文件来源文件夹：{" · ".join(html.escape(f) for f in n)}</div>'
-            body+=GUIDE_HTML
             body+='<div class="foot">文件检索管理系统 · 新增文件放进已选文件夹后点“新增文件一键索引”只补新文件；需全量刷新才点“全部文件重建索引”</div></body></html>'
             self.send_response(200); self.send_header("Content-Type","text/html;charset=utf-8"); self.end_headers(); self.wfile.write(body.encode())
 
